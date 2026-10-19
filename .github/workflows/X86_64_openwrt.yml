@@ -76,6 +76,9 @@ jobs:
           echo 'src-git istore https://github.com/linkease/istore;main' >> feeds.conf.default
           echo 'src-git nas https://github.com/linkease/nas-packages.git;master' >> feeds.conf.default
           echo 'src-git nas_luci https://github.com/linkease/nas-packages-luci.git;main' >> feeds.conf.default
+          # PassWall 官方 feeds，必须在 feeds update 之前添加
+          sed -i '1i src-git passwall_luci https://github.com/Openwrt-Passwall/openwrt-passwall.git;main' feeds.conf.default
+          sed -i '1i src-git passwall_packages https://github.com/Openwrt-Passwall/openwrt-passwall-packages.git;main' feeds.conf.default
           echo "OPENWRT_PATH=$PWD" >> $GITHUB_ENV
           COMMIT_AUTHOR=$(git show -s --date=short --format="作者: %an" 2>/dev/null || echo "作者: 未知")
           echo "COMMIT_AUTHOR=$COMMIT_AUTHOR" >> $GITHUB_ENV
@@ -116,6 +119,10 @@ jobs:
         run: |
           cd openwrt
           make defconfig
+          echo '验证 PassWall 和 iStore 是否已进入编译配置...'
+          grep -E '^CONFIG_PACKAGE_(luci-app-passwall|xray-core|sing-box|luci-app-store)=' .config || true
+          grep -q '^CONFIG_PACKAGE_luci-app-passwall=y$' .config || { echo 'ERROR: PassWall 未选中，请检查 feeds 与依赖'; exit 1; }
+          grep -q '^CONFIG_PACKAGE_xray-core=y$' .config || { echo 'ERROR: xray-core 未选中'; exit 1; }
           make download -j$(nproc)
           find dl -size -1024c -exec ls -l {} \;
           find dl -size -1024c -exec rm -f {} \;
@@ -187,7 +194,7 @@ jobs:
 
           cat << EOF > release.txt
           - 🏪固件信息
-          - 🙏固件包含：Openclash、IPV6、打印机驱动、Zerotier、VNT、Docker、Lucky、Istore
+          - 🙏固件包含：Openclash、PassWall、IPV6、打印机驱动、Zerotier、VNT、Docker、Lucky、Istore
           - 📱平台架构: ${{ env.DEVICE_TARGET }}-${{ env.DEVICE_SUBTARGET }}
           - 🐳固件源码: ${{ env.REPO_URL }}
           - 📁源码分支: ${{ env.REPO_BRANCH }}
