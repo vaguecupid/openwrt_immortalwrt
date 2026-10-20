@@ -20,6 +20,9 @@ env:
   UPLOAD_RELEASE: true
   TZ: Asia/Shanghai
 
+permissions:
+  contents: write  # 允许 GITHUB_TOKEN 创建 Release 和标签
+
 jobs:
   build:
     runs-on: ubuntu-22.04
@@ -123,6 +126,10 @@ jobs:
           grep -E '^CONFIG_PACKAGE_(luci-app-passwall|xray-core|sing-box|luci-app-store)=' .config || true
           grep -q '^CONFIG_PACKAGE_luci-app-passwall=y$' .config || { echo 'ERROR: PassWall 未选中，请检查 feeds 与依赖'; exit 1; }
           grep -q '^CONFIG_PACKAGE_xray-core=y$' .config || { echo 'ERROR: xray-core 未选中'; exit 1; }
+          if grep -q '^CONFIG_PACKAGE_\(geoview\|luci-app-passwall_INCLUDE_Geoview\)=y$' .config; then
+            echo 'ERROR: Geoview 被选中，当前 Go 1.23 工具链无法编译最新 Geoview'
+            exit 1
+          fi
           make download -j$(nproc)
           find dl -size -1024c -exec ls -l {} \;
           find dl -size -1024c -exec rm -f {} \;
@@ -133,6 +140,7 @@ jobs:
           cd openwrt
           export GO111MODULE=on
           export GOPROXY=https://goproxy.cn,direct
+          # 注意：此设置不保证能升级 OpenWrt hostpkg 自行构建的 Go 工具链
           export GOTOOLCHAIN=auto
           echo -e "$(nproc) thread compile"
           make -j$(nproc) || make -j1 V=s
@@ -148,7 +156,7 @@ jobs:
 
       - name: 整理文件
         id: organize
-        if: ${{ env.UPLOAD_FIRMWARE == 'true' && !cancelled() }}
+        if: ${{ success() && steps.compile.outputs.status == 'success' && env.UPLOAD_FIRMWARE == 'true' }}
         run: |
           cd openwrt/bin/targets/${{ env.DEVICE_TARGET }}/${{ env.DEVICE_SUBTARGET }}
           [ -f "$OPENWRT_PATH/.config" ] && cp "$OPENWRT_PATH/.config" build.config
@@ -179,7 +187,7 @@ jobs:
 
       - name: 发布固件
         id: tag
-        if: env.UPLOAD_RELEASE == 'true' && !cancelled()
+        if: ${{ success() && steps.organize.outputs.status == 'success' && env.UPLOAD_RELEASE == 'true' }}
         run: |
           echo "release_tag=${{ env.date1 }}_build${{ github.run_number }}" >> $GITHUB_OUTPUT
           # 生成新格式的发布名称（immortalwrt-YYYY.MM.DD-HHMM）
