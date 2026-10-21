@@ -122,6 +122,18 @@ jobs:
         run: |
           cd openwrt
           make defconfig
+          # 检查 Go/Rust 软件包及实际生成的 Kconfig 选项
+          echo 'PassWall 代理核心配置核对:'
+          for pkg in luci-app-passwall xray-core sing-box shadowsocks-rust-sslocal; do
+            grep -qx "CONFIG_PACKAGE_${pkg}=y" .config || { echo "ERROR: ${pkg} 未启用（检查 feeds 与 make defconfig 输出）"; exit 1; }
+          done
+          grep -qx 'CONFIG_PACKAGE_luci-app-passwall_INCLUDE_SingBox=y' .config || { echo 'ERROR: PassWall Sing-box 选项未启用'; exit 1; }
+          grep -qx 'CONFIG_PACKAGE_luci-app-passwall_INCLUDE_Shadowsocks_Rust_Client=y' .config || { echo 'ERROR: PassWall Rust 客户端选项未启用'; exit 1; }
+          test -f feeds/packages/lang/rust/Makefile || { echo 'ERROR: 缺少 feeds/packages/lang/rust'; exit 1; }
+          echo 'Rust package Makefile:'
+          grep -E '^(PKG_VERSION|RUSTC_VERSION|HOST_BUILD_DEPENDS)' feeds/packages/lang/rust/Makefile || true
+          echo 'Go package Makefile:'
+          grep -E '^(PKG_VERSION|GO_VERSION)' feeds/packages/lang/golang/Makefile || true
           echo '验证 PassWall 和 iStore 是否已进入编译配置...'
           grep -E '^CONFIG_PACKAGE_(luci-app-passwall|xray-core|sing-box|luci-app-store)=' .config || true
           grep -q '^CONFIG_PACKAGE_luci-app-passwall=y$' .config || { echo 'ERROR: PassWall 未选中，请检查 feeds 与依赖'; exit 1; }
@@ -142,6 +154,10 @@ jobs:
           export GOPROXY=https://goproxy.cn,direct
           # 注意：此设置不保证能升级 OpenWrt hostpkg 自行构建的 Go 工具链
           export GOTOOLCHAIN=auto
+          # Buildroot 自己构建 rust/host、golang/host；宿主机 rustup 不等于交叉工具链
+          # 先单包检查，便于第一时间定位错误，不会掩盖真正日志
+          make package/feeds/passwall_packages/shadowsocks-rust/compile -j1 V=s
+          make package/feeds/passwall_packages/sing-box/compile -j1 V=s
           echo -e "$(nproc) thread compile"
           make -j$(nproc) || make -j1 V=s
           echo "date1=$(date +'%Y.%m.%d')" >> $GITHUB_ENV
