@@ -1,15 +1,9 @@
 #!/bin/bash
 # 配置修改
 
-# 0. 移除Rust包避免LLVM编译问题（编译错误修复）
-echo "正在移除Rust相关包以避免LLVM编译问题..."
-./scripts/feeds uninstall rust 2>/dev/null || true
-# 清理可能存在的Rust配置
-if [ -f ".config" ]; then
-    sed -i '/CONFIG_PACKAGE_rust/d' .config
-    sed -i '/CONFIG_PACKAGE_rust-bootstrap/d' .config
-fi
-echo "Rust包已移除"
+# 0. 保留 feeds/packages/lang/rust：Shadowsocks-rust 需要 rust/host。
+# 不要卸载 rust，也不要强行删除 .config 中的 Rust 相关选项。
+echo "保留 OpenWrt Rust host 构建依赖"
 
 # 1. 修改默认主题
 sed -i 's/luci-theme-design/luci-theme-argon/g' feeds/luci/collections/luci/Makefile
